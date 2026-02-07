@@ -1,11 +1,51 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { ChatSidebar } from "@/components/ChatSidebar";
+import { ChatPanel } from "@/components/ChatPanel";
+import { ContextWorkspace } from "@/components/ContextWorkspace";
+import { useChat } from "@/hooks/use-chat";
 
 const Index = () => {
+  const {
+    threads,
+    activeThreadId,
+    messages,
+    isStreaming,
+    currentInterrupt,
+    contextData,
+    createThread,
+    selectThread,
+    sendMessage,
+    submitInterruptResponse,
+  } = useChat();
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">Welcome to Your Blank App</h1>
-        <p className="text-xl text-muted-foreground">Start building your amazing project here!</p>
+    <div className="flex h-screen w-full overflow-hidden">
+      {/* Left Sidebar */}
+      <div className="w-64 shrink-0">
+        <ChatSidebar
+          threads={threads}
+          activeThreadId={activeThreadId}
+          onNewChat={createThread}
+          onSelectThread={selectThread}
+        />
+      </div>
+
+      {/* Center Chat */}
+      <div className="flex-1 min-w-0">
+        <ChatPanel
+          messages={messages}
+          isStreaming={isStreaming}
+          currentInterrupt={currentInterrupt}
+          onSendMessage={sendMessage}
+          onSubmitInterrupt={submitInterruptResponse}
+        />
+      </div>
+
+      {/* Right Context Workspace */}
+      <div className="w-96 shrink-0">
+        <ContextWorkspace
+          contextData={contextData}
+          onSubmitInterrupt={submitInterruptResponse}
+        />
       </div>
     </div>
   );
