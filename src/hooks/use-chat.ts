@@ -1,6 +1,11 @@
 import { useState, useCallback, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
-import type { ChatMessage, ChatThread, InterruptPayload } from "@/types/chat";
+import type {
+  ChatMessage,
+  ChatThread,
+  InterruptContent,
+  SelectionSummary,
+} from "@/types/chat";
 
 const API_BASE = "http://localhost:8000";
 
@@ -14,15 +19,18 @@ export function useChat() {
   });
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [currentInterrupt, setCurrentInterrupt] = useState<InterruptPayload | null>(null);
-  const [contextData, setContextData] = useState<InterruptPayload | null>(null);
+  const [currentInterrupt, setCurrentInterrupt] = useState<InterruptContent | null>(null);
+  const [contextData, setContextData] = useState<InterruptContent | null>(null);
+  const [currentNode, setCurrentNode] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const isFirstMessage = useRef(true);
 
-  const persistThreads = (t: ChatThread[]) => {
+  // ── Helpers ────────────────────────────────────────────────────────
+
+  const persistThreads = useCallback((t: ChatThread[]) => {
     setThreads(t);
     localStorage.setItem("chat_threads", JSON.stringify(t));
-  };
+  }, []);
 
   const createThread = useCallback(() => {
     const id = uuidv4();
@@ -32,28 +40,37 @@ export function useChat() {
       createdAt: new Date(),
       isActive: true,
     };
-    const updated = threads.map((t) => ({ ...t, isActive: false }));
-    persistThreads([thread, ...updated]);
+    setThreads((prev) => {
+      const updated = [thread, ...prev.map((t) => ({ ...t, isActive: false }))];
+      localStorage.setItem("chat_threads", JSON.stringify(updated));
+      return updated;
+    });
     setActiveThreadId(id);
     localStorage.setItem("active_thread_id", id);
     setMessages([]);
     setCurrentInterrupt(null);
     setContextData(null);
+    setCurrentNode(null);
     isFirstMessage.current = true;
     return id;
-  }, [threads]);
+  }, []);
 
   const selectThread = useCallback((id: string) => {
     setActiveThreadId(id);
     localStorage.setItem("active_thread_id", id);
-    const updated = threads.map((t) => ({ ...t, isActive: t.id === id }));
-    persistThreads(updated);
-    // In a real app, you'd load messages from storage
+    setThreads((prev) => {
+      const updated = prev.map((t) => ({ ...t, isActive: t.id === id }));
+      localStorage.setItem("chat_threads", JSON.stringify(updated));
+      return updated;
+    });
     setMessages([]);
     setCurrentInterrupt(null);
     setContextData(null);
+    setCurrentNode(null);
     isFirstMessage.current = true;
-  }, [threads]);
+  }, []);
+
+  // ── SSE stream parser ─────────────────────────────────────────────
 
   const parseSSEStream = useCallback(async (response: Response) => {
     const reader = response.body?.getReader();
@@ -61,10 +78,10 @@ export function useChat() {
 
     const decoder = new TextDecoder();
     let buffer = "";
-    let assistantMsgId = uuidv4();
+    const assistantMsgId = uuidv4();
     let accumulatedContent = "";
 
-    // Add placeholder assistant message
+    // Placeholder assistant message
     setMessages((prev) => [
       ...prev,
       { id: assistantMsgId, role: "assistant", content: "", timestamp: new Date() },
@@ -87,56 +104,52 @@ export function useChat() {
           try {
             const parsed = JSON.parse(raw);
 
-            // Check for interrupt
-            if (parsed.__interrupt__) {
-              const interrupt: InterruptPayload = parsed.__interrupt__;
-              setCurrentInterrupt(interrupt);
-
-              // Show context data in right panel for tables/status
-              if (interrupt.type === "selectable_table" || interrupt.type === "action_status") {
-                setContextData(interrupt);
-              }
-
-              // Update assistant message with interrupt prompt
-              if (interrupt.prompt) {
-                accumulatedContent += (accumulatedContent ? "\n\n" : "") + interrupt.prompt;
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMsgId
-                      ? { ...m, content: accumulatedContent, interrupt }
-                      : m
-                  )
-                );
-              }
-              return; // Stop processing stream on interrupt
-            }
-
-            // Check for messages content
-            if (parsed.messages) {
-              const content = Array.isArray(parsed.messages)
-                ? parsed.messages.map((m: any) => m.content || "").join("")
-                : parsed.messages.content || "";
-              if (content) {
-                accumulatedContent += content;
-                setMessages((prev) =>
-                  prev.map((m) =>
-                    m.id === assistantMsgId ? { ...m, content: accumulatedContent } : m
-                  )
-                );
-              }
-            }
-
-            // Direct content string
-            if (typeof parsed === "string") {
-              accumulatedContent += parsed;
+            // ── token event ──
+            if (parsed.type === "token" && typeof parsed.content === "string") {
+              accumulatedContent += parsed.content;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantMsgId ? { ...m, content: accumulatedContent } : m
                 )
               );
             }
+
+            // ── node_start event ──
+            if (parsed.type === "node_start" && parsed.node) {
+              setCurrentNode(parsed.node);
+            }
+
+            // ── interrupt event ──
+            if (parsed.type === "interrupt" && parsed.content) {
+              const interrupt: InterruptContent = parsed.content;
+              setCurrentInterrupt(interrupt);
+
+              // Show question in the assistant bubble
+              if (interrupt.question) {
+                accumulatedContent +=
+                  (accumulatedContent ? "\n\n" : "") + interrupt.question;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === assistantMsgId
+                      ? { ...m, content: accumulatedContent }
+                      : m
+                  )
+                );
+              }
+
+              // Push table / action_status to right panel
+              if (
+                interrupt.ui === "selectable_table" ||
+                interrupt.ui === "multi-select" ||
+                interrupt.ui === "action_status"
+              ) {
+                setContextData(interrupt);
+              }
+
+              return; // stop processing stream
+            }
           } catch {
-            // Non-JSON data line, treat as raw text
+            // Non-JSON line — treat as raw text token
             accumulatedContent += raw;
             setMessages((prev) =>
               prev.map((m) =>
@@ -148,8 +161,26 @@ export function useChat() {
       }
     } finally {
       reader.releaseLock();
+      setCurrentNode(null);
     }
   }, []);
+
+  // ── Send a message (start or resume) ──────────────────────────────
+
+  const callBackend = useCallback(
+    async (threadId: string, payload: Record<string, any>) => {
+      abortRef.current = new AbortController();
+      const response = await fetch(`${API_BASE}/threads/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ thread_id: threadId, ...payload }),
+        signal: abortRef.current.signal,
+      });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      await parseSSEStream(response);
+    },
+    [parseSSEStream]
+  );
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -158,12 +189,16 @@ export function useChat() {
         threadId = createThread();
       }
 
-      // Update thread title from first message
+      // Title from first message
       if (isFirstMessage.current) {
         const title = content.slice(0, 40) + (content.length > 40 ? "..." : "");
-        persistThreads(
-          threads.map((t) => (t.id === threadId ? { ...t, title } : t))
-        );
+        setThreads((prev) => {
+          const updated = prev.map((t) =>
+            t.id === threadId ? { ...t, title } : t
+          );
+          localStorage.setItem("chat_threads", JSON.stringify(updated));
+          return updated;
+        });
         isFirstMessage.current = false;
       }
 
@@ -179,18 +214,7 @@ export function useChat() {
       setCurrentInterrupt(null);
 
       try {
-        abortRef.current = new AbortController();
-        const isResume = messages.length > 1; // Has prior conversation
-        const endpoint = isResume ? "graph/resume" : "graph/start";
-        const url = `${API_BASE}/${endpoint}?thread_id=${threadId}&message=${encodeURIComponent(content)}`;
-
-        const response = await fetch(url, {
-          method: "POST",
-          signal: abortRef.current.signal,
-        });
-
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        await parseSSEStream(response);
+        await callBackend(threadId, { message: content });
       } catch (err: any) {
         if (err.name !== "AbortError") {
           setMessages((prev) => [
@@ -207,15 +231,49 @@ export function useChat() {
         setIsStreaming(false);
       }
     },
-    [activeThreadId, messages, threads, createThread, parseSSEStream]
+    [activeThreadId, createThread, callBackend]
   );
 
+  // ── Submit response to an interrupt ───────────────────────────────
+
   const submitInterruptResponse = useCallback(
-    async (response: any) => {
+    async (response: any, summary?: SelectionSummary) => {
+      const threadId = activeThreadId;
+      if (!threadId) return;
+
       setCurrentInterrupt(null);
-      await sendMessage(typeof response === "string" ? response : JSON.stringify(response));
+      setContextData(null);
+
+      // Show user response in chat with optional selection summary
+      const userMsg: ChatMessage = {
+        id: uuidv4(),
+        role: "user",
+        content: typeof response === "string" ? response : JSON.stringify(response),
+        timestamp: new Date(),
+        selectionSummary: summary,
+      };
+      setMessages((prev) => [...prev, userMsg]);
+      setIsStreaming(true);
+
+      try {
+        await callBackend(threadId, { input: { __resume__: response } });
+      } catch (err: any) {
+        if (err.name !== "AbortError") {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: uuidv4(),
+              role: "assistant",
+              content: `⚠ Connection error: ${err.message}.`,
+              timestamp: new Date(),
+            },
+          ]);
+        }
+      } finally {
+        setIsStreaming(false);
+      }
     },
-    [sendMessage]
+    [activeThreadId, callBackend]
   );
 
   return {
@@ -225,6 +283,7 @@ export function useChat() {
     isStreaming,
     currentInterrupt,
     contextData,
+    currentNode,
     createThread,
     selectThread,
     sendMessage,

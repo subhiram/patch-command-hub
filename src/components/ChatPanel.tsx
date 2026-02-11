@@ -1,22 +1,24 @@
 import { useState, useRef, useEffect } from "react";
-import { Send, Loader2, Bot, User } from "lucide-react";
+import { Send, Loader2, Bot, User, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { ChatMessage, InterruptPayload } from "@/types/chat";
+import type { ChatMessage, InterruptContent } from "@/types/chat";
 import { InterruptRenderer } from "@/components/InterruptRenderer";
 import { cn } from "@/lib/utils";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
   isStreaming: boolean;
-  currentInterrupt: InterruptPayload | null;
+  currentInterrupt: InterruptContent | null;
+  currentNode: string | null;
   onSendMessage: (content: string) => void;
-  onSubmitInterrupt: (response: any) => void;
+  onSubmitInterrupt: (response: any, summary?: any) => void;
 }
 
 export function ChatPanel({
   messages,
   isStreaming,
   currentInterrupt,
+  currentNode,
   onSendMessage,
   onSubmitInterrupt,
 }: ChatPanelProps) {
@@ -24,14 +26,31 @@ export function ChatPanel({
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Determine if the main input should act as the text_input responder
+  const isTextInputInterrupt = currentInterrupt?.ui === "text_input";
+  const inputDisabled = isStreaming || (!!currentInterrupt && !isTextInputInterrupt);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, currentInterrupt]);
 
+  // Focus the input when a text_input interrupt activates
+  useEffect(() => {
+    if (isTextInputInterrupt) {
+      inputRef.current?.focus();
+    }
+  }, [isTextInputInterrupt]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isStreaming) return;
-    onSendMessage(input.trim());
+    if (!input.trim() || inputDisabled) return;
+
+    if (isTextInputInterrupt) {
+      // Respond to the text_input interrupt via the main input
+      onSubmitInterrupt(input.trim());
+    } else {
+      onSendMessage(input.trim());
+    }
     setInput("");
   };
 
@@ -41,7 +60,16 @@ export function ChatPanel({
       <div className="px-6 py-3 border-b border-border flex items-center gap-2">
         <Bot className="h-4 w-4 text-primary" />
         <span className="text-sm font-medium text-foreground">Patch Agent</span>
-        {isStreaming && (
+
+        {/* Node stepper indicator */}
+        {currentNode && (
+          <div className="flex items-center gap-1.5 ml-auto bg-secondary/60 border border-border rounded-md px-2.5 py-1">
+            <Activity className="h-3 w-3 text-accent animate-pulse-glow" />
+            <span className="text-xs font-mono text-accent">{currentNode}</span>
+          </div>
+        )}
+
+        {isStreaming && !currentNode && (
           <span className="text-xs text-accent flex items-center gap-1 ml-auto">
             <Loader2 className="h-3 w-3 animate-spin" />
             Processing
@@ -79,6 +107,7 @@ export function ChatPanel({
                 <Bot className="h-4 w-4 text-primary" />
               </div>
             )}
+
             <div
               className={cn(
                 "max-w-[75%] rounded-lg px-4 py-3 text-sm leading-relaxed",
@@ -87,8 +116,25 @@ export function ChatPanel({
                   : "bg-card border border-border text-card-foreground"
               )}
             >
-              <pre className="whitespace-pre-wrap font-sans text-sm">{msg.content}</pre>
+              {/* Selection summary (compact table) for user messages */}
+              {msg.selectionSummary ? (
+                <div className="space-y-1">
+                  <span className="text-xs font-medium opacity-80">
+                    {msg.selectionSummary.label}
+                  </span>
+                  <ul className="text-xs space-y-0.5 font-mono opacity-90">
+                    {msg.selectionSummary.items.map((item, i) => (
+                      <li key={i}>• {item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <pre className="whitespace-pre-wrap font-sans text-sm">
+                  {msg.content}
+                </pre>
+              )}
             </div>
+
             {msg.role === "user" && (
               <div className="shrink-0 mt-1 h-7 w-7 rounded-md bg-secondary flex items-center justify-center">
                 <User className="h-4 w-4 text-secondary-foreground" />
@@ -97,13 +143,21 @@ export function ChatPanel({
           </div>
         ))}
 
-        {/* Inline interrupt */}
-        {currentInterrupt && currentInterrupt.type !== "selectable_table" && currentInterrupt.type !== "action_status" && (
-          <div className="animate-fade-in">
-            <InterruptRenderer interrupt={currentInterrupt} onSubmit={onSubmitInterrupt} />
-          </div>
-        )}
+        {/* Inline interrupt (shown only for yes_no, radio, etc. — NOT tables/action_status) */}
+        {currentInterrupt &&
+          currentInterrupt.ui !== "selectable_table" &&
+          currentInterrupt.ui !== "multi-select" &&
+          currentInterrupt.ui !== "action_status" &&
+          currentInterrupt.ui !== "text_input" && (
+            <div className="animate-fade-in">
+              <InterruptRenderer
+                interrupt={currentInterrupt}
+                onSubmit={onSubmitInterrupt}
+              />
+            </div>
+          )}
 
+        {/* Streaming dots */}
         {isStreaming && messages[messages.length - 1]?.content === "" && (
           <div className="flex gap-3 animate-fade-in">
             <div className="shrink-0 mt-1 h-7 w-7 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center">
@@ -124,20 +178,35 @@ export function ChatPanel({
 
       {/* Input */}
       <form onSubmit={handleSubmit} className="p-4 border-t border-border">
+        {/* Text-input interrupt hint */}
+        {isTextInputInterrupt && (
+          <p className="text-xs text-accent mb-2 px-1">
+            ⌨ The agent needs your text input — type your response below.
+          </p>
+        )}
         <div className="flex gap-2">
           <input
             ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={currentInterrupt ? "Respond to the prompt above..." : "Describe your patching task..."}
-            disabled={isStreaming}
-            className="flex-1 bg-secondary border border-border rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 disabled:opacity-50 transition-all"
+            placeholder={
+              isTextInputInterrupt
+                ? "Type your response to the agent..."
+                : currentInterrupt
+                  ? "Respond to the prompt above..."
+                  : "Describe your patching task..."
+            }
+            disabled={inputDisabled}
+            className={cn(
+              "flex-1 bg-secondary border border-border rounded-lg px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 disabled:opacity-50 transition-all",
+              isTextInputInterrupt && "ring-1 ring-accent/40 border-accent/40"
+            )}
           />
           <Button
             type="submit"
             size="icon"
-            disabled={isStreaming || !input.trim()}
+            disabled={inputDisabled || !input.trim()}
             className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
           >
             {isStreaming ? (

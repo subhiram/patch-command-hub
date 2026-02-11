@@ -1,10 +1,10 @@
 import { Server, Activity, AlertCircle } from "lucide-react";
-import type { InterruptPayload } from "@/types/chat";
+import type { InterruptContent, SelectionSummary } from "@/types/chat";
 import { InterruptRenderer } from "@/components/InterruptRenderer";
 
 interface ContextWorkspaceProps {
-  contextData: InterruptPayload | null;
-  onSubmitInterrupt: (response: any) => void;
+  contextData: InterruptContent | null;
+  onSubmitInterrupt: (response: any, summary?: SelectionSummary) => void;
 }
 
 export function ContextWorkspace({ contextData, onSubmitInterrupt }: ContextWorkspaceProps) {
