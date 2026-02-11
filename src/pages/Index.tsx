@@ -11,6 +11,7 @@ const Index = () => {
     isStreaming,
     currentInterrupt,
     contextData,
+    currentNode,
     createThread,
     selectThread,
     sendMessage,
@@ -35,6 +36,7 @@ const Index = () => {
           messages={messages}
           isStreaming={isStreaming}
           currentInterrupt={currentInterrupt}
+          currentNode={currentNode}
           onSendMessage={sendMessage}
           onSubmitInterrupt={submitInterruptResponse}
         />

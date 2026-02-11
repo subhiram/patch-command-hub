@@ -10,15 +10,59 @@ export interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  interrupt?: InterruptPayload;
+  /** Optional structured summary rendered instead of raw text for user selections */
+  selectionSummary?: SelectionSummary;
 }
 
-export type InterruptType = "selectable_table" | "yes_no" | "action_status" | "text_input";
+export interface SelectionSummary {
+  label: string;
+  items: string[];
+}
 
-export interface InterruptPayload {
-  type: InterruptType;
-  data: any;
-  prompt?: string;
+// ── SSE event types coming from the backend ──────────────────────────
+
+export type SSEEventType = "token" | "node_start" | "interrupt";
+
+export interface SSETokenEvent {
+  type: "token";
+  content: string;
+}
+
+export interface SSENodeStartEvent {
+  type: "node_start";
+  node: string;
+}
+
+export interface SSEInterruptEvent {
+  type: "interrupt";
+  content: InterruptContent;
+}
+
+export type SSEEvent = SSETokenEvent | SSENodeStartEvent | SSEInterruptEvent;
+
+// ── Interrupt payload ────────────────────────────────────────────────
+
+export type InterruptUIType =
+  | "selectable_table"
+  | "multi-select"
+  | "yes_no"
+  | "deployment_main_router"
+  | "radio"
+  | "action_status"
+  | "text_input";
+
+export interface InterruptOption {
+  id: string | number;
+  label: string;
+  [key: string]: any;
+}
+
+export interface InterruptContent {
+  question: string;
+  options: InterruptOption[];
+  ui: InterruptUIType;
+  /** Optional columns for table-based interrupts */
+  columns?: string[];
 }
 
 export interface SelectableTableData {
