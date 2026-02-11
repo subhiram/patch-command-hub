@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import type {
   ChatMessage,
@@ -17,7 +17,25 @@ export function useChat() {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(() => {
     return localStorage.getItem("active_thread_id");
   });
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const activeThreadIdRef = useRef(activeThreadId);
+  // Keep ref in sync
+  useEffect(() => { activeThreadIdRef.current = activeThreadId; }, [activeThreadId]);
+  const [messages, setMessagesRaw] = useState<ChatMessage[]>(() => {
+    const tid = localStorage.getItem("active_thread_id");
+    if (!tid) return [];
+    const saved = localStorage.getItem(`chat_messages_${tid}`);
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Wrapper that also persists messages to localStorage
+  const setMessages: typeof setMessagesRaw = useCallback((update) => {
+    setMessagesRaw((prev) => {
+      const next = typeof update === "function" ? update(prev) : update;
+      const tid = activeThreadIdRef.current;
+      if (tid) localStorage.setItem(`chat_messages_${tid}`, JSON.stringify(next));
+      return next;
+    });
+  }, []);
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentInterrupt, setCurrentInterrupt] = useState<InterruptContent | null>(null);
   const [contextData, setContextData] = useState<InterruptContent | null>(null);
@@ -46,8 +64,9 @@ export function useChat() {
       return updated;
     });
     setActiveThreadId(id);
+    activeThreadIdRef.current = id;
     localStorage.setItem("active_thread_id", id);
-    setMessages([]);
+    setMessagesRaw([]);
     setCurrentInterrupt(null);
     setContextData(null);
     setCurrentNode(null);
@@ -57,17 +76,20 @@ export function useChat() {
 
   const selectThread = useCallback((id: string) => {
     setActiveThreadId(id);
+    activeThreadIdRef.current = id;
     localStorage.setItem("active_thread_id", id);
     setThreads((prev) => {
       const updated = prev.map((t) => ({ ...t, isActive: t.id === id }));
       localStorage.setItem("chat_threads", JSON.stringify(updated));
       return updated;
     });
-    setMessages([]);
+    // Load persisted messages for this thread
+    const saved = localStorage.getItem(`chat_messages_${id}`);
+    setMessagesRaw(saved ? JSON.parse(saved) : []);
     setCurrentInterrupt(null);
     setContextData(null);
     setCurrentNode(null);
-    isFirstMessage.current = true;
+    isFirstMessage.current = false;
   }, []);
 
   // ── SSE stream parser ─────────────────────────────────────────────
@@ -139,9 +161,9 @@ export function useChat() {
 
               // Push table / action_status to right panel
               if (
-                interrupt.ui === "selectable_table" ||
-                interrupt.ui === "multi-select" ||
-                interrupt.ui === "action_status"
+                interrupt.ui === "render_selectable_table" ||
+                interrupt.ui === "display_endpoints_for_deployment_component" ||
+                interrupt.ui === "display_action_status"
               ) {
                 setContextData(interrupt);
               }
