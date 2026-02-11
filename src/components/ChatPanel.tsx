@@ -145,9 +145,9 @@ export function ChatPanel({
 
         {/* Inline interrupt (shown only for yes_no, radio, etc. — NOT tables/action_status) */}
         {currentInterrupt &&
-          currentInterrupt.ui !== "selectable_table" &&
-          currentInterrupt.ui !== "multi-select" &&
-          currentInterrupt.ui !== "action_status" &&
+          currentInterrupt.ui !== "render_selectable_table" &&
+          currentInterrupt.ui !== "display_endpoints_for_deployment_component" &&
+          currentInterrupt.ui !== "display_action_status" &&
           currentInterrupt.ui !== "text_input" && (
             <div className="animate-fade-in">
               <InterruptRenderer

@@ -43,12 +43,12 @@ export type SSEEvent = SSETokenEvent | SSENodeStartEvent | SSEInterruptEvent;
 // ── Interrupt payload ────────────────────────────────────────────────
 
 export type InterruptUIType =
-  | "selectable_table"
-  | "multi-select"
-  | "yes_no"
+  | "render_selectable_table"
+  | "render_yes_no_prompt"
   | "deployment_main_router"
-  | "radio"
-  | "action_status"
+  | "sub_deployment_router_component"
+  | "display_endpoints_for_deployment_component"
+  | "display_action_status"
   | "text_input";
 
 export interface InterruptOption {
@@ -75,3 +75,17 @@ export interface ActionStatusEntry {
   status: "pending" | "running" | "success" | "failed";
   log: string;
 }
+
+/** Which interrupt UI types should be rendered in the right panel vs inline in chat */
+export const RIGHT_PANEL_INTERRUPTS: InterruptUIType[] = [
+  "render_selectable_table",
+  "display_endpoints_for_deployment_component",
+  "display_action_status",
+];
+
+/** Which interrupt UI types render inline in the chat stream */
+export const INLINE_INTERRUPTS: InterruptUIType[] = [
+  "render_yes_no_prompt",
+  "deployment_main_router",
+  "sub_deployment_router_component",
+];
