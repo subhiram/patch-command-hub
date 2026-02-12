@@ -143,19 +143,15 @@ export function ChatPanel({
           </div>
         ))}
 
-        {/* Inline interrupt (shown only for yes_no, radio, etc. — NOT tables/action_status) */}
-        {currentInterrupt &&
-          currentInterrupt.ui !== "render_selectable_table" &&
-          currentInterrupt.ui !== "display_endpoints_for_deployment_component" &&
-          currentInterrupt.ui !== "display_action_status" &&
-          currentInterrupt.ui !== "text_input" && (
-            <div className="animate-fade-in">
-              <InterruptRenderer
-                interrupt={currentInterrupt}
-                onSubmit={onSubmitInterrupt}
-              />
-            </div>
-          )}
+        {/* Inline interrupt — all types rendered in chat flow */}
+        {currentInterrupt && currentInterrupt.ui !== "text_input" && (
+          <div className="animate-fade-in max-w-[90%]">
+            <InterruptRenderer
+              interrupt={currentInterrupt}
+              onSubmit={onSubmitInterrupt}
+            />
+          </div>
+        )}
 
         {/* Streaming dots */}
         {isStreaming && messages[messages.length - 1]?.content === "" && (

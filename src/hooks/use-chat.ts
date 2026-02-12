@@ -38,7 +38,7 @@ export function useChat() {
   }, []);
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentInterrupt, setCurrentInterrupt] = useState<InterruptContent | null>(null);
-  const [contextData, setContextData] = useState<InterruptContent | null>(null);
+  // contextData removed — all interrupts render inline in chat
   const [currentNode, setCurrentNode] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const isFirstMessage = useRef(true);
@@ -68,7 +68,6 @@ export function useChat() {
     localStorage.setItem("active_thread_id", id);
     setMessagesRaw([]);
     setCurrentInterrupt(null);
-    setContextData(null);
     setCurrentNode(null);
     isFirstMessage.current = true;
     return id;
@@ -87,7 +86,6 @@ export function useChat() {
     const saved = localStorage.getItem(`chat_messages_${id}`);
     setMessagesRaw(saved ? JSON.parse(saved) : []);
     setCurrentInterrupt(null);
-    setContextData(null);
     setCurrentNode(null);
     isFirstMessage.current = false;
   }, []);
@@ -157,15 +155,6 @@ export function useChat() {
                       : m
                   )
                 );
-              }
-
-              // Push table / action_status to right panel
-              if (
-                interrupt.ui === "render_selectable_table" ||
-                interrupt.ui === "display_endpoints_for_deployment_component" ||
-                interrupt.ui === "display_action_status"
-              ) {
-                setContextData(interrupt);
               }
 
               return; // stop processing stream
@@ -264,7 +253,6 @@ export function useChat() {
       if (!threadId) return;
 
       setCurrentInterrupt(null);
-      setContextData(null);
 
       // Show user response in chat with optional selection summary
       const userMsg: ChatMessage = {
@@ -304,7 +292,6 @@ export function useChat() {
     messages,
     isStreaming,
     currentInterrupt,
-    contextData,
     currentNode,
     createThread,
     selectThread,
