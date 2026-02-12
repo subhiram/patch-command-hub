@@ -1,6 +1,5 @@
 import { ChatSidebar } from "@/components/ChatSidebar";
 import { ChatPanel } from "@/components/ChatPanel";
-import { ContextWorkspace } from "@/components/ContextWorkspace";
 import { useChat } from "@/hooks/use-chat";
 
 const Index = () => {
@@ -10,7 +9,6 @@ const Index = () => {
     messages,
     isStreaming,
     currentInterrupt,
-    contextData,
     currentNode,
     createThread,
     selectThread,
@@ -30,7 +28,7 @@ const Index = () => {
         />
       </div>
 
-      {/* Center Chat */}
+      {/* Chat Panel (full width) */}
       <div className="flex-1 min-w-0">
         <ChatPanel
           messages={messages}
@@ -38,14 +36,6 @@ const Index = () => {
           currentInterrupt={currentInterrupt}
           currentNode={currentNode}
           onSendMessage={sendMessage}
-          onSubmitInterrupt={submitInterruptResponse}
-        />
-      </div>
-
-      {/* Right Context Workspace */}
-      <div className="w-96 shrink-0">
-        <ContextWorkspace
-          contextData={contextData}
           onSubmitInterrupt={submitInterruptResponse}
         />
       </div>
