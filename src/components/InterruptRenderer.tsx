@@ -458,27 +458,28 @@ function ActionStatusInterrupt({
     if (autoResumed) return;
     const timer = setTimeout(() => {
       setAutoResumed(true);
-      onSubmit("dummy");
-    }, 3000);
+      onSubmit("");
+    }, 30000);
     return () => clearTimeout(timer);
   }, [autoResumed, onSubmit]);
 
   const statusColor = (status: string) => {
-    switch (status) {
-      case "success": return "text-success";
-      case "failed": return "text-destructive";
-      case "running": return "text-accent";
-      default: return "text-muted-foreground";
-    }
+    const s = status.toLowerCase();
+    if (s.includes("success") || s.includes("completed")) return "text-success";
+    if (s.includes("failed") || s.includes("error")) return "text-destructive";
+    if (s.includes("running") || s.includes("progress")) return "text-accent";
+    // Handle the specific backend string
+    if (s.includes("not reported")) return "text-yellow-500"; 
+    return "text-muted-foreground";
   };
 
   const statusDot = (status: string) => {
-    switch (status) {
-      case "success": return "bg-success";
-      case "failed": return "bg-destructive";
-      case "running": return "bg-accent animate-pulse-glow";
-      default: return "bg-muted-foreground";
-    }
+    const s = status.toLowerCase();
+    if (s.includes("success") || s.includes("completed")) return "bg-success";
+    if (s.includes("failed") || s.includes("error")) return "bg-destructive";
+    if (s.includes("running") || s.includes("progress")) return "bg-accent animate-pulse-glow";
+    if (s.includes("not reported")) return "bg-yellow-500";
+    return "bg-muted-foreground";
   };
 
   return (
@@ -529,7 +530,6 @@ function ActionStatusInterrupt({
             size="sm"
             className="bg-primary text-primary-foreground"
           >
-            Resume Now
           </Button>
         )}
       </div>

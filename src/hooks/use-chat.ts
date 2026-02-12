@@ -225,7 +225,7 @@ export function useChat() {
       setCurrentInterrupt(null);
 
       try {
-        await callBackend(threadId, { message: content });
+        await callBackend(threadId, { input: content });
       } catch (err: any) {
         if (err.name !== "AbortError") {
           setMessages((prev) => [
